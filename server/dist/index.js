@@ -5,6 +5,7 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
 Object.defineProperty(exports, "__esModule", { value: true });
 const express_1 = __importDefault(require("express"));
 const client_1 = require("@prisma/client");
+const auth_routes_1 = __importDefault(require("./routes/auth.routes"));
 const app = (0, express_1.default)();
 const prisma = new client_1.PrismaClient();
 const PORT = process.env.PORT || 3000;
@@ -12,10 +13,7 @@ app.use(express_1.default.json());
 app.get('/health', (req, res) => {
     res.json({ status: 'ok' });
 });
-app.get('/users', async (req, res) => {
-    const users = await prisma.users.findMany();
-    res.json(users);
-});
+app.use('/api/auth', auth_routes_1.default);
 app.listen(PORT, () => {
     console.log(`Server running on port ${PORT}`);
 });

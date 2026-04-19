@@ -1,6 +1,3 @@
--- =============================================
---  Habit Tracker — schemat bazy danych
--- =============================================
 
 CREATE TABLE users (
     user_id     SERIAL PRIMARY KEY,
@@ -21,19 +18,30 @@ CREATE TABLE habits (
 );
 
 CREATE TABLE habit_logs (
-    log_id      SERIAL PRIMARY KEY,
-    habit_id    INT NOT NULL REFERENCES habits(habit_id) ON DELETE CASCADE,
-    completed   BOOLEAN DEFAULT FALSE,
-    date        DATE NOT NULL,
-    note        TEXT
+    habit_log_id  SERIAL PRIMARY KEY,
+    user_id       INT NOT NULL REFERENCES users(user_id) ON DELETE CASCADE,
+    habit_id      INT NOT NULL REFERENCES habits(habit_id) ON DELETE CASCADE,
+    completed     BOOLEAN DEFAULT FALSE,
+    date          DATE NOT NULL,
+    note          TEXT,
+    UNIQUE (habit_id, date)
 );
 
 CREATE TABLE goals (
-    goal_id         SERIAL PRIMARY KEY,
-    user_id         INT NOT NULL REFERENCES users(user_id) ON DELETE CASCADE,
-    name            VARCHAR(255) NOT NULL,
-    description     TEXT,
-    target_value    NUMERIC(10,2),
-    current_value   NUMERIC(10,2) DEFAULT 0,
-    deadline        DATE
+    goal_id       SERIAL PRIMARY KEY,
+    user_id       INT NOT NULL REFERENCES users(user_id) ON DELETE CASCADE,
+    name          VARCHAR(255) NOT NULL,
+    description   TEXT,
+    target_value  NUMERIC(10,2),
+    deadline      DATE
+);
+
+CREATE TABLE goal_logs (
+    goal_log_id   SERIAL PRIMARY KEY,
+    user_id       INT NOT NULL REFERENCES users(user_id) ON DELETE CASCADE,
+    goal_id       INT NOT NULL REFERENCES goals(goal_id) ON DELETE CASCADE,
+    current_value NUMERIC(10,2),
+    date          DATE NOT NULL,
+    note          TEXT,
+    UNIQUE (goal_id, date)
 );

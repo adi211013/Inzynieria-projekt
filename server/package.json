@@ -6,7 +6,9 @@
   "scripts": {
     "dev": "nodemon src/index.ts",
     "build": "tsc",
-    "start": "node dist/index.js"
+    "start": "node dist/index.js",
+    "prisma:generate": "prisma generate",
+    "prisma:pull": "prisma db pull --force"
   },
   "keywords": [],
   "author": "",
@@ -14,24 +16,21 @@
   "type": "commonjs",
   "dependencies": {
     "@prisma/client": "^5.22.0",
+    "bcrypt": "^6.0.0",
     "dotenv": "^17.4.1",
     "express": "^5.2.1",
+    "jsonwebtoken": "^9.0.3",
     "pg": "^8.20.0",
     "prisma": "^5.22.0"
   },
   "devDependencies": {
+    "@types/bcrypt": "^6.0.0",
     "@types/express": "^5.0.6",
+    "@types/jsonwebtoken": "^9.0.10",
     "@types/node": "^25.5.2",
     "@types/pg": "^8.20.0",
     "nodemon": "^3.1.14",
     "ts-node": "^10.9.2",
     "typescript": "^6.0.2"
-  },
-  "scripts": {
-    "dev": "nodemon src/index.ts",
-    "build": "tsc",
-    "start": "node dist/index.js",
-    "prisma:generate": "prisma generate",
-    "prisma:pull": "prisma db pull --force"
   }
 }
