@@ -1,15 +1,13 @@
-import { Router } from 'express';
 import { getHabits, getHabit, createHabit, updateHabit, deleteHabit } from '../controllers/habits.controller';
-import { authMiddleware } from '../middleware/auth.middleware';
+import {authMiddleware} from "../middleware/auth.middleware";
+import {Router} from "express";
 
-const router = Router();
+const habitsRouter = Router();
+habitsRouter.use(authMiddleware);
+habitsRouter.get('/', getHabits);
+habitsRouter.get('/:id', getHabit);
+habitsRouter.post('/', createHabit);
+habitsRouter.put('/:id', updateHabit);
+habitsRouter.delete('/:id', deleteHabit);
 
-router.use(authMiddleware);
-
-router.get('/', getHabits);
-router.get('/:id', getHabit);
-router.post('/', createHabit);
-router.put('/:id', updateHabit);
-router.delete('/:id', deleteHabit);
-
-export default router;
+export { habitsRouter };
