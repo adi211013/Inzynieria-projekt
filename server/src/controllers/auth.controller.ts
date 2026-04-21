@@ -2,6 +2,23 @@ import { Request, Response } from 'express';
 import bcrypt from 'bcrypt';
 import jwt from 'jsonwebtoken';
 import prisma from '../lib/prisma';
+import { AuthRequest } from '../middleware/auth.middleware';
+
+const VALID_THEMES = ['light', 'dark'];
+const VALID_LANGUAGES = ['pl', 'en'];
+
+const userSelect = {
+    user_id: true,
+    username: true,
+    email: true,
+    display_name: true,
+    theme: true,
+    timezone: true,
+    language: true,
+    notifications_enabled: true,
+    reminder_time: true,
+    created_at: true,
+};
 
 export const register = async (req: Request, res: Response) => {
     const { username, email, password } = req.body;
@@ -31,10 +48,17 @@ export const register = async (req: Request, res: Response) => {
 
         res.status(201).json({
             token,
-            user: { id: user.user_id, username: user.username, email: user.email }
+            user: {
+                id: user.user_id,
+                username: user.username,
+                email: user.email,
+                theme: user.theme,
+                timezone: user.timezone,
+                language: user.language,
+            }
         });
-    } catch (e){
-        console.error(e);
+    } catch (error) {
+        console.error(error);
         res.status(500).json({ message: 'Błąd serwera' });
     }
 };
@@ -66,19 +90,26 @@ export const login = async (req: Request, res: Response) => {
 
         res.json({
             token,
-            user: { id: user.user_id, username: user.username, email: user.email }
+            user: {
+                id: user.user_id,
+                username: user.username,
+                email: user.email,
+                theme: user.theme,
+                timezone: user.timezone,
+                language: user.language,
+            }
         });
-    } catch(e) {
-        console.error(e);
+    } catch (error) {
+        console.error(error);
         res.status(500).json({ message: 'Błąd serwera' });
     }
 };
 
-export const me = async (req: Request & { userId?: number }, res: Response) => {
+export const me = async (req: AuthRequest, res: Response) => {
     try {
         const user = await prisma.users.findUnique({
             where: { user_id: req.userId! },
-            select: { user_id: true, username: true, email: true, created_at: true }
+            select: userSelect,
         });
 
         if (!user) {
@@ -87,8 +118,96 @@ export const me = async (req: Request & { userId?: number }, res: Response) => {
         }
 
         res.json(user);
-    } catch(e) {
-        console.error(e);
+    } catch (error) {
+        console.error(error);
+        res.status(500).json({ message: 'Błąd serwera' });
+    }
+};
+
+export const updateUser = async (req: AuthRequest, res: Response) => {
+    const {
+        username,
+        email,
+        password,
+        display_name,
+        theme,
+        timezone,
+        language,
+        notifications_enabled,
+        reminder_time,
+    } = req.body;
+
+    try {
+        const data: any = {};
+
+        if (username !== undefined) data.username = username;
+        if (email !== undefined) data.email = email;
+        if (password !== undefined) data.password = await bcrypt.hash(password, 10);
+        if (display_name !== undefined) data.display_name = display_name;
+        if (notifications_enabled !== undefined) data.notifications_enabled = notifications_enabled;
+        if (reminder_time !== undefined) data.reminder_time = reminder_time;
+
+        if (theme !== undefined) {
+            if (!VALID_THEMES.includes(theme)) {
+                res.status(400).json({ message: `Nieprawidłowy motyw. Dozwolone: ${VALID_THEMES.join(', ')}` });
+                return;
+            }
+            data.theme = theme;
+        }
+
+        if (language !== undefined) {
+            if (!VALID_LANGUAGES.includes(language)) {
+                res.status(400).json({ message: `Nieprawidłowy język. Dozwolone: ${VALID_LANGUAGES.join(', ')}` });
+                return;
+            }
+            data.language = language;
+        }
+
+        if (timezone !== undefined) {
+            try {
+                Intl.DateTimeFormat(undefined, { timeZone: timezone });
+                data.timezone = timezone;
+            } catch {
+                res.status(400).json({ message: 'Nieprawidłowa strefa czasowa (IANA)' });
+                return;
+            }
+        }
+
+        if (reminder_time !== undefined && reminder_time !== null) {
+            if (!/^([01]\d|2[0-3]):[0-5]\d$/.test(reminder_time)) {
+                res.status(400).json({ message: 'Nieprawidłowy format czasu (HH:MM)' });
+                return;
+            }
+        }
+
+        if (Object.keys(data).length === 0) {
+            res.status(400).json({ message: 'Brak danych do aktualizacji' });
+            return;
+        }
+
+        const user = await prisma.users.update({
+            where: { user_id: req.userId! },
+            data,
+            select: userSelect,
+        });
+
+        res.json(user);
+    } catch (error: any) {
+        if (error.code === 'P2002') {
+            res.status(409).json({ message: 'Email lub nazwa użytkownika już zajęta' });
+            return;
+        }
+        console.error(error);
+        res.status(500).json({ message: 'Błąd serwera' });
+    }
+};
+
+export const deleteUser = async (req: AuthRequest, res: Response) => {
+    try {
+        await prisma.users.delete({ where: { user_id: req.userId! } });
+        res.json({ message: 'Konto zostało usunięte' });
+    } catch (error) {
+        console.error(error);
         res.status(500).json({ message: 'Błąd serwera' });
     }
 };
