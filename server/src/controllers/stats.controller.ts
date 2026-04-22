@@ -55,6 +55,18 @@ async function calculateStreak(habitId: number, timezone: string): Promise<numbe
     return streak;
 }
 
+async function autoFailExpiredGoals(userId: number, today: Date): Promise<void> {
+    await prisma.goals.updateMany({
+        where: {
+            user_id: userId,
+            is_active: true,
+            status: 'in_progress',
+            deadline: { lt: today, not: null },
+        },
+        data: { status: 'failed' },
+    });
+}
+
 export const overview = async (req: AuthRequest, res: Response) => {
     try {
         const user = await prisma.users.findUnique({
@@ -64,6 +76,8 @@ export const overview = async (req: AuthRequest, res: Response) => {
 
         const timezone = user?.timezone ?? 'UTC';
         const today = getTodayInTimezone(timezone);
+
+        await autoFailExpiredGoals(req.userId!, today);
 
         const [habits, goals, totalLogs, todayLogs] = await Promise.all([
             prisma.habits.findMany({
@@ -88,15 +102,21 @@ export const overview = async (req: AuthRequest, res: Response) => {
             }))
         );
 
-        const goalsProgress = goals.map((g) => ({
-            goal_id: g.goal_id,
-            name: g.name,
-            status: g.status,
-            target_days: g.target_days,
-            current_days: g.goal_logs.length,
-            progress_percent: Math.min(100, Math.round((g.goal_logs.length / g.target_days) * 100)),
-            deadline: g.deadline,
-        }));
+        const goalsProgress = goals.map((g) => {
+            const currentDays = Math.min(g.goal_logs.length, g.target_days); // clamp do target_days
+            const rawPercent = (g.goal_logs.length / g.target_days) * 100;
+            const percent = Math.min(100, Math.round(rawPercent)); // clamp do 100%
+
+            return {
+                goal_id: g.goal_id,
+                name: g.name,
+                status: g.status,
+                target_days: g.target_days,
+                current_days: currentDays,
+                progress_percent: percent,
+                deadline: g.deadline,
+            };
+        });
 
         const longestStreak = habitStreaks.reduce((max, h) => Math.max(max, h.streak), 0);
 
@@ -117,6 +137,8 @@ export const overview = async (req: AuthRequest, res: Response) => {
 
 export const habitStats = async (req: AuthRequest, res: Response) => {
     const { id } = req.params;
+    const page = Math.max(1, Number(req.query.page) || 1);
+    const limit = Math.min(365, Math.max(1, Number(req.query.limit) || 90));
 
     try {
         const habit = await prisma.habits.findFirst({
@@ -139,7 +161,8 @@ export const habitStats = async (req: AuthRequest, res: Response) => {
             prisma.habit_logs.findMany({
                 where: { habit_id: Number(id) },
                 orderBy: { date: 'desc' },
-                take: 90,
+                skip: (page - 1) * limit,
+                take: limit,
             }),
             prisma.habit_logs.count({ where: { habit_id: Number(id) } }),
         ]);
@@ -151,6 +174,8 @@ export const habitStats = async (req: AuthRequest, res: Response) => {
             streak,
             total_completions: totalCount,
             recent_logs: logs,
+            page,
+            limit,
         });
     } catch (error) {
         console.error(error);

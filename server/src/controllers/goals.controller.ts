@@ -2,6 +2,36 @@ import { Response } from 'express';
 import prisma from '../lib/prisma';
 import { AuthRequest } from '../middleware/auth.middleware';
 
+async function getUserTimezone(userId: number): Promise<string> {
+    const user = await prisma.users.findUnique({
+        where: { user_id: userId },
+        select: { timezone: true },
+    });
+    return user?.timezone ?? 'UTC';
+}
+
+function getTodayInTimezone(timezone: string): Date {
+    const now = new Date();
+    const parts = new Intl.DateTimeFormat('en-CA', {
+        timeZone: timezone,
+        year: 'numeric',
+        month: '2-digit',
+        day: '2-digit',
+    }).formatToParts(now);
+
+    const year = parts.find(p => p.type === 'year')!.value;
+    const month = parts.find(p => p.type === 'month')!.value;
+    const day = parts.find(p => p.type === 'day')!.value;
+
+    return new Date(`${year}-${month}-${day}T00:00:00Z`);
+}
+
+function parseDeadline(deadline: string): Date | null {
+    const d = new Date(deadline);
+    if (isNaN(d.getTime())) return null;
+    return new Date(`${d.toISOString().slice(0, 10)}T00:00:00Z`);
+}
+
 export const getGoals = async (req: AuthRequest, res: Response) => {
     try {
         const goals = await prisma.goals.findMany({
@@ -71,6 +101,22 @@ export const createGoal = async (req: AuthRequest, res: Response) => {
             return;
         }
 
+        let deadlineDate: Date | null = null;
+        if (deadline) {
+            deadlineDate = parseDeadline(deadline);
+            if (!deadlineDate) {
+                res.status(400).json({ message: 'Nieprawidłowy format deadline (YYYY-MM-DD)' });
+                return;
+            }
+
+            const timezone = await getUserTimezone(req.userId!);
+            const today = getTodayInTimezone(timezone);
+            if (deadlineDate < today) {
+                res.status(400).json({ message: 'Deadline nie może być w przeszłości' });
+                return;
+            }
+        }
+
         const goal = await prisma.goals.create({
             data: {
                 user_id: req.userId!,
@@ -82,7 +128,7 @@ export const createGoal = async (req: AuthRequest, res: Response) => {
                 color,
                 frequency,
                 target_days,
-                deadline: deadline ? new Date(deadline) : null,
+                deadline: deadlineDate,
                 notifications_enabled: notifications_enabled ?? false,
                 reminder_time,
             },
@@ -121,9 +167,36 @@ export const updateGoal = async (req: AuthRequest, res: Response) => {
             return;
         }
 
-        if (status !== undefined && !['in_progress', 'completed', 'failed'].includes(status)) {
-            res.status(400).json({ message: 'Nieprawidłowy status' });
-            return;
+        if (status !== undefined) {
+            if (!['in_progress', 'completed', 'failed'].includes(status)) {
+                res.status(400).json({ message: 'Nieprawidłowy status' });
+                return;
+            }
+            if (goal.status !== 'in_progress' && status === 'in_progress') {
+                res.status(400).json({
+                    message: 'Nie można cofnąć ukończonego/nieudanego celu do "in_progress"',
+                });
+                return;
+            }
+        }
+
+        let deadlineValue: Date | null | undefined = undefined;
+        if (deadline !== undefined) {
+            if (deadline === null) {
+                deadlineValue = null;
+            } else {
+                deadlineValue = parseDeadline(deadline);
+                if (!deadlineValue) {
+                    res.status(400).json({ message: 'Nieprawidłowy format deadline (YYYY-MM-DD)' });
+                    return;
+                }
+                const timezone = await getUserTimezone(req.userId!);
+                const today = getTodayInTimezone(timezone);
+                if (deadlineValue < today) {
+                    res.status(400).json({ message: 'Deadline nie może być w przeszłości' });
+                    return;
+                }
+            }
         }
 
         const updated = await prisma.goals.update({
@@ -137,7 +210,7 @@ export const updateGoal = async (req: AuthRequest, res: Response) => {
                 frequency,
                 target_days,
                 status,
-                deadline: deadline !== undefined ? (deadline ? new Date(deadline) : null) : undefined,
+                deadline: deadlineValue,
                 notifications_enabled,
                 reminder_time,
             },

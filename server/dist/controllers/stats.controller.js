@@ -5,10 +5,6 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.habitStats = exports.overview = void 0;
 const prisma_1 = __importDefault(require("../lib/prisma"));
-/**
- * Zwraca "dzisiaj" w timezone użytkownika jako DATE (00:00 UTC).
- * Np. dla Warszawy o 1:30 w nocy "dzisiaj" to już nowa data.
- */
 function getTodayInTimezone(timezone) {
     const now = new Date();
     const parts = new Intl.DateTimeFormat('en-CA', {
@@ -26,10 +22,6 @@ function daysBetween(a, b) {
     const ms = a.getTime() - b.getTime();
     return Math.round(ms / (1000 * 60 * 60 * 24));
 }
-/**
- * Liczy aktualny streak dla nawyku — ile dni z rzędu (cofając się od dziś)
- * nawyk został wykonany. Bierze pod uwagę timezone usera.
- */
 async function calculateStreak(habitId, timezone) {
     const today = getTodayInTimezone(timezone);
     const logs = await prisma_1.default.habit_logs.findMany({
@@ -41,7 +33,6 @@ async function calculateStreak(habitId, timezone) {
         return 0;
     let streak = 0;
     let expectedDate = today;
-    // Jeśli nie ma dzisiaj, sprawdź od wczoraj (streak nie jest jeszcze "zerwany")
     const mostRecent = logs[0].date;
     const gap = daysBetween(today, mostRecent);
     if (gap > 1)
@@ -60,10 +51,17 @@ async function calculateStreak(habitId, timezone) {
     }
     return streak;
 }
-/**
- * GET /api/stats/overview
- * Zwraca ogólne statystyki: liczba nawyków, celów, streaków, itp.
- */
+async function autoFailExpiredGoals(userId, today) {
+    await prisma_1.default.goals.updateMany({
+        where: {
+            user_id: userId,
+            is_active: true,
+            status: 'in_progress',
+            deadline: { lt: today, not: null },
+        },
+        data: { status: 'failed' },
+    });
+}
 const overview = async (req, res) => {
     try {
         const user = await prisma_1.default.users.findUnique({
@@ -72,6 +70,7 @@ const overview = async (req, res) => {
         });
         const timezone = user?.timezone ?? 'UTC';
         const today = getTodayInTimezone(timezone);
+        await autoFailExpiredGoals(req.userId, today);
         const [habits, goals, totalLogs, todayLogs] = await Promise.all([
             prisma_1.default.habits.findMany({
                 where: { user_id: req.userId, is_active: true },
@@ -84,7 +83,6 @@ const overview = async (req, res) => {
             prisma_1.default.habit_logs.count({ where: { user_id: req.userId } }),
             prisma_1.default.habit_logs.count({ where: { user_id: req.userId, date: today } }),
         ]);
-        // streaki dla każdego nawyku
         const habitStreaks = await Promise.all(habits.map(async (h) => ({
             habit_id: h.habit_id,
             name: h.name,
@@ -92,16 +90,20 @@ const overview = async (req, res) => {
             color: h.color,
             streak: await calculateStreak(h.habit_id, timezone),
         })));
-        // progress celów
-        const goalsProgress = goals.map((g) => ({
-            goal_id: g.goal_id,
-            name: g.name,
-            status: g.status,
-            target_days: g.target_days,
-            current_days: g.goal_logs.length,
-            progress_percent: Math.min(100, Math.round((g.goal_logs.length / g.target_days) * 100)),
-            deadline: g.deadline,
-        }));
+        const goalsProgress = goals.map((g) => {
+            const currentDays = Math.min(g.goal_logs.length, g.target_days); // clamp do target_days
+            const rawPercent = (g.goal_logs.length / g.target_days) * 100;
+            const percent = Math.min(100, Math.round(rawPercent)); // clamp do 100%
+            return {
+                goal_id: g.goal_id,
+                name: g.name,
+                status: g.status,
+                target_days: g.target_days,
+                current_days: currentDays,
+                progress_percent: percent,
+                deadline: g.deadline,
+            };
+        });
         const longestStreak = habitStreaks.reduce((max, h) => Math.max(max, h.streak), 0);
         res.json({
             total_habits: habits.length,
@@ -119,12 +121,10 @@ const overview = async (req, res) => {
     }
 };
 exports.overview = overview;
-/**
- * GET /api/stats/habits/:id
- * Szczegółowe statystyki pojedynczego nawyku.
- */
 const habitStats = async (req, res) => {
     const { id } = req.params;
+    const page = Math.max(1, Number(req.query.page) || 1);
+    const limit = Math.min(365, Math.max(1, Number(req.query.limit) || 90));
     try {
         const habit = await prisma_1.default.habits.findFirst({
             where: { habit_id: Number(id), user_id: req.userId },
@@ -142,7 +142,8 @@ const habitStats = async (req, res) => {
             prisma_1.default.habit_logs.findMany({
                 where: { habit_id: Number(id) },
                 orderBy: { date: 'desc' },
-                take: 90,
+                skip: (page - 1) * limit,
+                take: limit,
             }),
             prisma_1.default.habit_logs.count({ where: { habit_id: Number(id) } }),
         ]);
@@ -152,6 +153,8 @@ const habitStats = async (req, res) => {
             streak,
             total_completions: totalCount,
             recent_logs: logs,
+            page,
+            limit,
         });
     }
     catch (error) {

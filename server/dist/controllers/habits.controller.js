@@ -139,7 +139,6 @@ const updateHabit = async (req, res) => {
     }
 };
 exports.updateHabit = updateHabit;
-// Soft delete — ustawia is_active = false
 const deleteHabit = async (req, res) => {
     const { id } = req.params;
     try {
