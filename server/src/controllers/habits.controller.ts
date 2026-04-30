@@ -28,9 +28,11 @@ function validateFrequency(frequency: any): string | null {
 }
 
 export const getHabits = async (req: AuthRequest, res: Response) => {
+    const archived = req.query.archived === 'true';
+
     try {
         const habits = await prisma.habits.findMany({
-            where: { user_id: req.userId!, is_active: true },
+            where: { user_id: req.userId!, is_active: !archived },
             orderBy: { created_at: 'desc' },
         });
         res.json(habits);
