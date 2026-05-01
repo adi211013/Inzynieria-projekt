@@ -18,6 +18,22 @@ function getTodayInTimezone(timezone: string): Date {
     return new Date(`${year}-${month}-${day}T00:00:00Z`);
 }
 
+function toUserLocalDate(isoUtc: string, timezone: string): Date {
+    const d = new Date(isoUtc);
+    const parts = new Intl.DateTimeFormat('en-CA', {
+        timeZone: timezone,
+        year: 'numeric',
+        month: '2-digit',
+        day: '2-digit',
+    }).formatToParts(d);
+
+    const year = parts.find(p => p.type === 'year')!.value;
+    const month = parts.find(p => p.type === 'month')!.value;
+    const day = parts.find(p => p.type === 'day')!.value;
+
+    return new Date(`${year}-${month}-${day}T00:00:00Z`);
+}
+
 function daysBetween(a: Date, b: Date): number {
     const ms = a.getTime() - b.getTime();
     return Math.round(ms / (1000 * 60 * 60 * 24));
@@ -92,6 +108,13 @@ export const overview = async (req: AuthRequest, res: Response) => {
             prisma.habit_logs.count({ where: { user_id: req.userId!, date: today } }),
         ]);
 
+        const habitIds = habits.map(h => h.habit_id);
+        const todayHabitLogs = await prisma.habit_logs.findMany({
+            where: { user_id: req.userId!, habit_id: { in: habitIds }, date: today },
+            select: { habit_id: true },
+        });
+        const completedTodaySet = new Set(todayHabitLogs.map(l => l.habit_id));
+
         const habitStreaks = await Promise.all(
             habits.map(async (h) => ({
                 habit_id: h.habit_id,
@@ -99,13 +122,14 @@ export const overview = async (req: AuthRequest, res: Response) => {
                 icon: h.icon,
                 color: h.color,
                 streak: await calculateStreak(h.habit_id, timezone),
+                completed_today: completedTodaySet.has(h.habit_id),
             }))
         );
 
         const goalsProgress = goals.map((g) => {
-            const currentDays = Math.min(g.goal_logs.length, g.target_days); // clamp do target_days
+            const currentDays = Math.min(g.goal_logs.length, g.target_days);
             const rawPercent = (g.goal_logs.length / g.target_days) * 100;
-            const percent = Math.min(100, Math.round(rawPercent)); // clamp do 100%
+            const percent = Math.min(100, Math.round(rawPercent));
 
             return {
                 goal_id: g.goal_id,
@@ -177,6 +201,84 @@ export const habitStats = async (req: AuthRequest, res: Response) => {
             page,
             limit,
         });
+    } catch (error) {
+        console.error(error);
+        res.status(500).json({ message: 'Błąd serwera' });
+    }
+};
+
+export const history = async (req: AuthRequest, res: Response) => {
+    try {
+        const user = await prisma.users.findUnique({
+            where: { user_id: req.userId! },
+            select: { timezone: true },
+        });
+
+        const timezone = user?.timezone ?? 'UTC';
+        const today = getTodayInTimezone(timezone);
+        const defaultFrom = new Date(today.getTime() - 29 * 86400000);
+
+        const fromDate = req.query.from
+            ? toUserLocalDate(String(req.query.from), timezone)
+            : defaultFrom;
+        const toDate = req.query.to
+            ? toUserLocalDate(String(req.query.to), timezone)
+            : today;
+
+        if (fromDate > toDate) {
+            res.status(400).json({ message: 'Parametr "from" nie może być większy niż "to"' });
+            return;
+        }
+
+        const activeHabitsCount = await prisma.habits.count({
+            where: { user_id: req.userId!, is_active: true },
+        });
+
+        const logs = await prisma.habit_logs.findMany({
+            where: {
+                user_id: req.userId!,
+                date: { gte: fromDate, lte: toDate },
+            },
+            include: {
+                habits: { select: { category: true } },
+            },
+            orderBy: { date: 'asc' },
+        });
+
+        const dailyMap = new Map<string, number>();
+        const cursor = new Date(fromDate);
+        while (cursor <= toDate) {
+            dailyMap.set(cursor.toISOString().slice(0, 10), 0);
+            cursor.setUTCDate(cursor.getUTCDate() + 1);
+        }
+
+        for (const log of logs) {
+            const dateKey = log.date instanceof Date
+                ? log.date.toISOString().slice(0, 10)
+                : String(log.date).slice(0, 10);
+            dailyMap.set(dateKey, (dailyMap.get(dateKey) ?? 0) + 1);
+        }
+
+        const daily = Array.from(dailyMap.entries()).map(([date, completed]) => ({
+            date,
+            completed,
+            total: activeHabitsCount,
+        }));
+
+        const categoryMap = new Map<string, number>();
+        for (const log of logs) {
+            const key = log.habits?.category ?? '__null__';
+            categoryMap.set(key, (categoryMap.get(key) ?? 0) + 1);
+        }
+
+        const by_category = Array.from(categoryMap.entries())
+            .map(([key, completed]) => ({
+                category: key === '__null__' ? null : key,
+                completed,
+            }))
+            .sort((a, b) => b.completed - a.completed);
+
+        res.json({ daily, by_category });
     } catch (error) {
         console.error(error);
         res.status(500).json({ message: 'Błąd serwera' });

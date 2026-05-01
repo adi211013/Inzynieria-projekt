@@ -8,6 +8,10 @@ RUN npm install -g pnpm
 RUN pnpm install --frozen-lockfile
 
 COPY . .
+
+ARG NEXT_PUBLIC_API_URL=http://localhost:3001/api
+ENV NEXT_PUBLIC_API_URL=$NEXT_PUBLIC_API_URL
+
 RUN pnpm run build
 
 FROM node:20-alpine
@@ -25,8 +29,5 @@ RUN chown -R appuser:appgroup /app
 USER appuser
 
 EXPOSE 3000
-
-HEALTHCHECK --interval=30s --timeout=5s --start-period=15s --retries=3 \
-  CMD wget -qO- http://localhost:3000 || exit 1
 
 CMD ["node", "server.js"]
