@@ -5,6 +5,7 @@ import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
 import { useRouter } from "next/navigation";
+import { useQueryClient } from "@tanstack/react-query";
 import { useUser, useRefreshUser } from "@/components/UserContext";
 import { api } from "@/lib/api";
 
@@ -48,6 +49,7 @@ export default function UstawieniaPage() {
   const user = useUser();
   const refreshUser = useRefreshUser();
   const router = useRouter();
+  const queryClient = useQueryClient();
   const [serverError, setServerError] = useState("");
   const [saved, setSaved] = useState(false);
 
@@ -107,6 +109,7 @@ export default function UstawieniaPage() {
 
   function handleLogout() {
     localStorage.removeItem("token");
+    queryClient.clear();
     router.push("/login");
   }
 

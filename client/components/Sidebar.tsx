@@ -77,9 +77,9 @@ export default function Sidebar() {
 
       <div className="px-3 pb-4">
         <div className="rounded-xl bg-accent-soft p-6">
-          <p className="font-semibold text-xl text-primary leading-snug">
-            {getGreeting()}
-            {firstName ? `, ${firstName}` : ""}
+          <p className="font-semibold text-xl text-primary leading-snug truncate">
+            {`${getGreeting()},`} <br />
+            <span>{firstName ? `${firstName}` : ""}</span>
           </p>
           <p className="text-sm text-text-2 mt-0.5">{getPolishDate()}</p>
         </div>
