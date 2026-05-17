@@ -31,7 +31,7 @@ export default function FAB() {
     <>
       <button
         onClick={() => setOpen(true)}
-        className="fixed bottom-6 right-6 flex size-14 items-center justify-center rounded-full bg-primary text-primary-fg shadow-lg hover:bg-primary/90 transition-colors z-40 cursor-pointer"
+        className="fixed bottom-20 right-4 md:bottom-6 md:right-6 flex size-14 items-center justify-center rounded-full bg-primary text-primary-fg shadow-lg hover:bg-primary/90 transition-colors z-40 cursor-pointer"
       >
         <Plus className="size-6" strokeWidth={2.5} />
       </button>
@@ -50,10 +50,7 @@ export default function FAB() {
           {view === "pick" && (
             <>
               <DialogHeader>
-                <DialogTitle
-                  onClick={() => console.log(habits)}
-                  className="text-text-1"
-                >
+                <DialogTitle className="text-text-1">
                   Co chcesz dodać?
                 </DialogTitle>
               </DialogHeader>

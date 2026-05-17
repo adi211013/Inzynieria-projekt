@@ -38,7 +38,8 @@ import {
 import type { LucideIcon } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { CATEGORIES } from "@/lib/categories";
-import { useCreateHabit } from "@/hooks/useHabits";
+import { useCreateHabit, useUpdateHabit } from "@/hooks/useHabits";
+import type { Habit } from "@/types/domain";
 import { toast } from "sonner";
 
 const habitSchema = z.object({
@@ -46,6 +47,7 @@ const habitSchema = z.object({
     .string()
     .min(1, "Nazwa jest wymagana")
     .max(50, "Maksymalnie 50 znaków"),
+  description: z.string().max(200, "Maksymalnie 200 znaków").optional(),
   category: z.union([
     z.literal("zdrowie"),
     z.literal("sport"),
@@ -114,11 +116,53 @@ const DAYS = ["Pon", "Wt", "Śr", "Czw", "Pt", "Sob", "Ndz"];
 interface HabitFormProps {
   onBack: () => void;
   onClose: () => void;
+  habit?: Habit;
 }
 
-export default function HabitForm({ onBack, onClose }: HabitFormProps) {
-  const [trackCount, setTrackCount] = useState(false);
-  const { mutate: createHabit, isPending, error } = useCreateHabit();
+function freqToFormValues(habit?: Habit) {
+  if (!habit)
+    return {
+      frequency: "daily" as const,
+      days_of_week: [] as number[],
+      times_per_week: 3,
+    };
+  const f = habit.frequency;
+  if (f.type === "weekly_days")
+    return {
+      frequency: "weekly_days" as const,
+      days_of_week: f.days,
+      times_per_week: 3,
+    };
+  if (f.type === "times_per_week")
+    return {
+      frequency: "times_per_week" as const,
+      days_of_week: [] as number[],
+      times_per_week: f.count,
+    };
+  return {
+    frequency: "daily" as const,
+    days_of_week: [] as number[],
+    times_per_week: 3,
+  };
+}
+
+export default function HabitForm({ onBack, onClose, habit }: HabitFormProps) {
+  const isEdit = !!habit;
+  const [trackCount, setTrackCount] = useState(!!habit?.target_count);
+  const {
+    mutate: createHabit,
+    isPending: isCreating,
+    error: createError,
+  } = useCreateHabit();
+  const {
+    mutate: updateHabit,
+    isPending: isUpdating,
+    error: updateError,
+  } = useUpdateHabit();
+  const isPending = isCreating || isUpdating;
+  const error = createError ?? updateError;
+
+  const freqDefaults = freqToFormValues(habit);
 
   const {
     register,
@@ -129,13 +173,15 @@ export default function HabitForm({ onBack, onClose }: HabitFormProps) {
   } = useForm<HabitFormValues>({
     resolver: zodResolver(habitSchema),
     defaultValues: {
-      name: "",
-      category: "inne",
-      icon: "Dumbbell",
-      color: "#22C55E",
-      frequency: "daily",
-      days_of_week: [],
-      times_per_week: 3,
+      name: habit?.name ?? "",
+      description: habit?.description ?? "",
+      category: (habit?.category as HabitFormValues["category"]) ?? "inne",
+      icon: habit?.icon ?? "Dumbbell",
+      color: habit?.color ?? "#22C55E",
+      frequency: freqDefaults.frequency,
+      days_of_week: freqDefaults.days_of_week,
+      times_per_week: freqDefaults.times_per_week,
+      target_count: habit?.target_count,
     },
   });
 
@@ -170,25 +216,35 @@ export default function HabitForm({ onBack, onClose }: HabitFormProps) {
   }
 
   function onSubmit(values: HabitFormValues) {
-    createHabit(
-      {
-        name: values.name,
-        frequency: buildFrequency(values),
-        icon: values.icon,
-        color: values.color,
-        category: values.category,
-        ...(trackCount &&
-          values.target_count != null && {
-            target_count: values.target_count,
-          }),
-      },
-      {
+    const body = {
+      name: values.name,
+      description: values.description || undefined,
+      frequency: buildFrequency(values),
+      icon: values.icon,
+      color: values.color,
+      category: values.category,
+      ...(trackCount &&
+        values.target_count != null && { target_count: values.target_count }),
+    };
+
+    if (isEdit) {
+      updateHabit(
+        { id: habit.habit_id, body },
+        {
+          onSuccess: () => {
+            toast.success("Nawyk zaktualizowany");
+            onClose();
+          },
+        },
+      );
+    } else {
+      createHabit(body, {
         onSuccess: () => {
           toast.success("Nawyk został utworzony");
           onClose();
         },
-      },
-    );
+      });
+    }
   }
 
   return (
@@ -206,7 +262,7 @@ export default function HabitForm({ onBack, onClose }: HabitFormProps) {
           <ArrowLeft className="size-4" />
         </button>
         <h2 className="font-heading text-base font-semibold text-text-1 flex-1">
-          Nowy nawyk
+          {isEdit ? "Edytuj nawyk" : "Nowy nawyk"}
         </h2>
         <button
           type="button"
@@ -237,6 +293,26 @@ export default function HabitForm({ onBack, onClose }: HabitFormProps) {
           />
           {errors.name && (
             <p className="text-xs text-red">{errors.name.message}</p>
+          )}
+        </div>
+
+        {/* Opis */}
+        <div className="flex flex-col gap-1.5">
+          <label className="text-xs font-semibold uppercase tracking-wide text-text-3">
+            Opis{" "}
+            <span className="normal-case font-normal tracking-normal">
+              (opcjonalnie)
+            </span>
+          </label>
+          <textarea
+            {...register("description")}
+            placeholder="Krótki opis nawyku... (200 znaków)"
+            rows={2}
+            maxLength={200}
+            className="w-full rounded-xl border border-border bg-surface-alt px-3 py-2.5 text-sm text-text-1 placeholder:text-text-3 outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary transition-colors resize-none"
+          />
+          {errors.description && (
+            <p className="text-xs text-red">{errors.description.message}</p>
           )}
         </div>
 
@@ -489,7 +565,13 @@ export default function HabitForm({ onBack, onClose }: HabitFormProps) {
           disabled={isPending}
           className="flex-1 rounded-xl bg-primary py-2.5 text-sm font-semibold text-primary-fg hover:bg-primary/90 transition-colors cursor-pointer disabled:opacity-70"
         >
-          {isPending ? "Tworzenie..." : "Utwórz nawyk"}
+          {isPending
+            ? isEdit
+              ? "Zapisywanie..."
+              : "Tworzenie..."
+            : isEdit
+              ? "Zapisz zmiany"
+              : "Utwórz nawyk"}
         </button>
       </div>
     </form>

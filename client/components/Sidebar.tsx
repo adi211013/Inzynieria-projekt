@@ -11,6 +11,7 @@ import {
   BarChart2,
   Settings,
 } from "lucide-react";
+import { cn } from "@/lib/utils";
 import { useUser, useDisplayName } from "./UserContext";
 
 const mainNav = [
@@ -59,38 +60,42 @@ export default function Sidebar() {
   const firstName = displayName ? getFirstName(displayName) : "";
 
   return (
-    <aside className="flex h-screen w-[240px] shrink-0 flex-col bg-surface border-r border-border">
-      <div className="px-4 pt-5 pb-3">
+    <aside className="hidden md:flex h-screen md:w-16 lg:w-[240px] shrink-0 flex-col bg-surface border-r border-border">
+      {/* Logo */}
+      <div className="flex items-center md:justify-center lg:justify-start px-2 lg:px-4 pt-5 pb-3">
         <Link href="/" className="flex items-center gap-2.5">
-          <div className="flex size-9 items-center justify-center rounded-xl bg-primary">
+          <div className="flex size-9 shrink-0 items-center justify-center rounded-xl bg-primary">
             <Star className="size-[18px] text-primary-fg" fill="currentColor" />
           </div>
-          <span className="font-heading font-semibold text-xl text-text-1">
+          <span className="hidden lg:block font-heading font-semibold text-xl text-text-1">
             Sanctuary
           </span>
         </Link>
       </div>
 
-      <div className="px-4 pb-3">
+      {/* Divider — visible only on lg */}
+      <div className="hidden lg:block px-4 pb-3">
         <div className="h-px bg-border" />
       </div>
 
-      <div className="px-3 pb-4">
+      {/* Greeting — visible only on lg */}
+      <div className="hidden lg:block px-3 pb-4">
         <div className="rounded-xl bg-accent-soft p-6">
           <p className="font-semibold text-xl text-primary leading-snug truncate">
             {`${getGreeting()},`} <br />
-            <span>{firstName ? `${firstName}` : ""}</span>
+            <span>{firstName}</span>
           </p>
           <p className="text-sm text-text-2 mt-0.5">{getPolishDate()}</p>
         </div>
       </div>
 
-      <div className="flex-1 overflow-y-auto px-3 space-y-4">
+      {/* Nav */}
+      <div className="flex-1 overflow-y-auto space-y-4 md:px-2 lg:px-3">
         <div>
-          <p className="text-[10px] font-semibold uppercase tracking-widest text-text-3 px-2 mb-1">
+          <p className="hidden lg:block text-[10px] font-semibold uppercase tracking-widest text-text-3 px-2 mb-1">
             Główne
           </p>
-          <nav className="space-y-5">
+          <nav className="space-y-0.5">
             {mainNav.map((item) => {
               const isActive = pathname === item.href;
               const Icon = item.icon;
@@ -98,14 +103,23 @@ export default function Sidebar() {
                 <Link
                   key={item.href}
                   href={item.href}
-                  className={`flex items-center gap-3 rounded-lg py-2.5 text-sm font-medium transition-colors ${
+                  className={cn(
+                    "flex items-center text-sm font-medium transition-colors",
+                    "md:size-10 md:mx-auto md:justify-center md:rounded-xl",
+                    "lg:size-auto lg:mx-0 lg:w-full lg:gap-3 lg:py-2.5 lg:justify-start lg:rounded-lg",
                     isActive
-                      ? "bg-accent-soft text-primary pl-[9px] pr-3"
-                      : "px-3 text-text-2 hover:bg-surface-alt hover:text-text-1"
-                  }`}
+                      ? cn(
+                          "bg-accent-soft text-primary font-semibold",
+                          "lg:pl-[9px] lg:pr-3",
+                        )
+                      : cn(
+                          "text-text-2 hover:bg-surface-alt hover:text-text-1",
+                          "lg:px-3",
+                        ),
+                  )}
                 >
                   <Icon className="size-[18px] shrink-0" />
-                  <span className="flex-1">{item.name}</span>
+                  <span className="hidden lg:block flex-1">{item.name}</span>
                 </Link>
               );
             })}
@@ -113,7 +127,7 @@ export default function Sidebar() {
         </div>
 
         <div>
-          <p className="text-[10px] font-semibold uppercase tracking-widest text-text-3 px-2 mb-1">
+          <p className="hidden lg:block text-[10px] font-semibold uppercase tracking-widest text-text-3 px-2 mb-1">
             Konto
           </p>
           <nav className="space-y-0.5">
@@ -124,14 +138,23 @@ export default function Sidebar() {
                 <Link
                   key={item.href}
                   href={item.href}
-                  className={`flex items-center gap-3 rounded-lg py-2.5 text-sm font-medium transition-colors ${
+                  className={cn(
+                    "flex items-center text-sm font-medium transition-colors",
+                    "md:size-10 md:mx-auto md:justify-center md:rounded-xl",
+                    "lg:size-auto lg:mx-0 lg:w-full lg:gap-3 lg:py-2.5 lg:justify-start lg:rounded-lg",
                     isActive
-                      ? "bg-accent-soft pl-[9px] pr-3"
-                      : "px-3 text-text-2 hover:bg-surface-alt hover:text-text-1"
-                  }`}
+                      ? cn(
+                          "bg-accent-soft text-primary font-semibold",
+                          "lg:pl-[9px] lg:pr-3",
+                        )
+                      : cn(
+                          "text-text-2 hover:bg-surface-alt hover:text-text-1",
+                          "lg:px-3",
+                        ),
+                  )}
                 >
                   <Icon className="size-[18px] shrink-0" />
-                  <span>{item.name}</span>
+                  <span className="hidden lg:block">{item.name}</span>
                 </Link>
               );
             })}
@@ -139,12 +162,19 @@ export default function Sidebar() {
         </div>
       </div>
 
+      {/* User section */}
       <div className="p-3 border-t border-border">
-        <div className="flex items-center gap-3 rounded-lg px-2 py-2 hover:bg-surface-alt transition-colors cursor-pointer">
+        <div
+          className={cn(
+            "flex items-center rounded-lg hover:bg-surface-alt transition-colors cursor-pointer",
+            "md:justify-center md:p-1",
+            "lg:justify-start lg:gap-3 lg:px-2 lg:py-2",
+          )}
+        >
           <div className="flex size-8 shrink-0 items-center justify-center rounded-full bg-primary text-primary-fg text-xs font-bold">
             {displayName ? getInitials(displayName) : "?"}
           </div>
-          <div className="min-w-0 flex-1">
+          <div className="hidden lg:block min-w-0 flex-1">
             <p className="text-sm font-semibold text-text-1 truncate">
               {displayName || "Użytkownik"}
             </p>

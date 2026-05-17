@@ -127,11 +127,12 @@ export const updateHabit = async (req: AuthRequest, res: Response) => {
         unit,
         notifications_enabled,
         reminder_time,
+        is_active,
     } = req.body;
 
     try {
         const habit = await prisma.habits.findFirst({
-            where: { habit_id: Number(id), user_id: req.userId!, is_active: true },
+            where: { habit_id: Number(id), user_id: req.userId! },
         });
 
         if (!habit) {
@@ -160,6 +161,7 @@ export const updateHabit = async (req: AuthRequest, res: Response) => {
                 unit,
                 notifications_enabled,
                 reminder_time,
+                is_active,
             },
         });
 

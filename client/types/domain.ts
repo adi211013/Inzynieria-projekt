@@ -1,3 +1,43 @@
+export interface HabitStat {
+  habit_id: number;
+  name: string;
+  icon?: string;
+  color?: string;
+  streak: number;
+  completed_today: boolean;
+}
+
+export interface GoalStat {
+  goal_id: number;
+  name: string;
+  status: GoalStatus;
+  target_days: number;
+  current_days: number;
+  progress_percent: number;
+  deadline?: string;
+}
+
+export interface StatsOverview {
+  total_habits: number;
+  total_goals: number;
+  total_logs: number;
+  today_logs: number;
+  longest_current_streak: number;
+  habits: HabitStat[];
+  goals: GoalStat[];
+}
+
+export interface DailyStats {
+  date: string;
+  completed: number;
+  total: number;
+}
+
+export interface StatsHistory {
+  daily: DailyStats[];
+  by_category: { category: string; completed: number }[];
+}
+
 export type FrequencyBody =
   | { type: "daily" }
   | { type: "weekly_days"; days: number[] }
@@ -6,6 +46,7 @@ export type FrequencyBody =
 export interface Habit {
   habit_id: number;
   name: string;
+  description?: string;
   frequency: FrequencyBody;
   icon?: string;
   color?: string;
@@ -17,6 +58,7 @@ export interface Habit {
 
 export interface CreateHabitBody {
   name: string;
+  description?: string;
   frequency: FrequencyBody;
   icon?: string;
   color?: string;
